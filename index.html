@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lingo Multiplayer</title>
+    <title>Lingo Üsküdar/Ümraniye</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -16,7 +16,10 @@
     <div class="container">
         <!-- Join Screen -->
         <div id="join-screen" class="glass-panel">
-            <h1 class="logo">Lingo<span class="highlight">Oyna</span></h1>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px;">
+                <img src="main.jpg" alt="Logo" class="main-logo-img" onerror="this.style.display='none'">
+                <h1 class="logo" style="margin: 0; font-size: 2.2rem;">Lingo <span class="highlight">Üsküdar/Ümraniye</span></h1>
+            </div>
             <p>Eşler Arası (P2P) Bağlantı</p>
             
             <input type="text" id="team-name" placeholder="Takım Adınız..." autocomplete="off" />
@@ -43,7 +46,10 @@
                     <strong id="display-room-code" style="letter-spacing: 2px;">---</strong>
                     <button id="copy-code-btn" style="background: none; border: none; cursor: pointer; color: var(--text-color);" title="Kopyala">📋</button>
                 </div>
-                <h1 class="logo-small">Lingo</h1>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img src="main.jpg" alt="Logo" class="header-logo-img" onerror="this.style.display='none'">
+                    <h1 class="logo-small">Lingo Üsküdar/Ümraniye</h1>
+                </div>
                 <div class="timer-box">
                     <span id="timer">45</span>s
                 </div>

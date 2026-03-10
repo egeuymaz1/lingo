@@ -99,6 +99,19 @@ h1.logo {
     color: var(--primary);
 }
 
+.main-logo-img {
+    max-width: 80px;
+    height: auto;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+.header-logo-img {
+    max-height: 40px;
+    width: auto;
+    border-radius: 8px;
+}
+
 input[type="text"] {
     width: 100%;
     padding: 15px 20px;
