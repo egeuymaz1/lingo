@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lingo Multiplayer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-animation">
+        <div class="blob blob1"></div>
+        <div class="blob blob2"></div>
+    </div>
+
+    <div class="container">
+        <!-- Join Screen -->
+        <div id="join-screen" class="glass-panel">
+            <h1 class="logo">Lingo<span class="highlight">Oyna</span></h1>
+            <p>Eşler Arası (P2P) Bağlantı</p>
+            
+            <input type="text" id="team-name" placeholder="Takım Adınız..." autocomplete="off" />
+            
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button id="host-btn" class="btn primary-btn">Oda Kur (Host)</button>
+            </div>
+            
+            <div style="margin: 20px 0; border-top: 1px solid var(--glass-border); padding-top: 20px;">
+                <input type="text" id="room-code-input" placeholder="Oda Kodunu Girin..." autocomplete="off" style="text-transform: uppercase;" />
+                <button id="join-btn" class="btn secondary-btn">Odaya Katıl</button>
+            </div>
+            <p id="connection-status" style="margin-top: 15px; font-weight: bold; color: var(--primary);"></p>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="hidden">
+            <header class="glass-header">
+                <div class="round-info">
+                    <span id="current-length">4</span> Harfli Tur
+                </div>
+                <h1 class="logo-small">Lingo</h1>
+                <div class="timer-box">
+                    <span id="timer">45</span>s
+                </div>
+            </header>
+
+            <div class="main-layout">
+                <div class="sidebar left-sidebar glass-panel">
+                    <h3>🏆 Sıralama</h3>
+                    <ul id="leaderboard">
+                        <!-- <li>Takım A - 0 Puan</li> -->
+                    </ul>
+                </div>
+
+                <div class="board-area">
+                    <div id="turn-indicator" class="turn-banner">📍 Sıra Bekleniyor...</div>
+                    <div id="game-board" class="game-board">
+                        <!-- Tiles will be generated dynamically -->
+                    </div>
+                </div>
+
+                <div class="sidebar right-sidebar glass-panel">
+                    <h3>🎮 Eylem</h3>
+                    <div class="input-area" id="keyboard-hint" style="text-align: center; font-size: 0.9rem; color: #8b949e;">
+                        <p>Klavyenizi kullanarak kelimeyi yazın ve <b>Enter</b>'a basın.</p>
+                    </div>
+                    <p id="system-message" class="message-text"></p>
+                    <button id="start-game-btn" class="btn secondary-btn hidden">Oyunu Başlat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
