@@ -18,6 +18,8 @@ const turnIndicator = document.getElementById('turn-indicator');
 const timerDisplay = document.getElementById('timer');
 const currentLengthDisplay = document.getElementById('current-length');
 const systemMessage = document.getElementById('system-message');
+const displayRoomCode = document.getElementById('display-room-code');
+const copyCodeBtn = document.getElementById('copy-code-btn');
 
 // --- GAME LOGIC (HOST ONLY) ---
 const ROUNDS = [4, 5, 6, 7, 8, 9];
@@ -211,12 +213,27 @@ hostBtn.addEventListener('click', async () => {
     // Add self to teams
     gameState.teams.push(myTeamObj);
     
-    connStatus.innerHTML = `Oda Kuruldu! Arkadaşlarına Oda Kodunu Gönder: <br><span style="font-size:2em; letter-spacing: 2px;">${myTeamObj.id}</span>`;
-    setTimeout(() => {
-        joinScreen.classList.add('hidden');
-        gameScreen.classList.remove('hidden');
-        hostBroadcast('gameStateUpdate', gameState); // Update self UI
-    }, 2000);
+    // Update UI 
+    displayRoomCode.textContent = myTeamObj.id;
+    
+    joinScreen.classList.add('hidden');
+    gameScreen.classList.remove('hidden');
+    hostBroadcast('gameStateUpdate', gameState); // Update self UI
+});
+
+// Copy Code to Clipboard
+copyCodeBtn.addEventListener('click', () => {
+    const code = displayRoomCode.textContent;
+    if (code && code !== '---') {
+        navigator.clipboard.writeText(code).then(() => {
+            const originalText = copyCodeBtn.textContent;
+            copyCodeBtn.textContent = '✅';
+            setTimeout(() => { copyCodeBtn.textContent = originalText; }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            prompt("Oda Kodunu kopyalayın:", code);
+        });
+    }
 });
 
 // Listening for incoming connections (Only Host does this usually)
@@ -265,12 +282,10 @@ joinBtn.addEventListener('click', () => {
     conn = peer.connect(roomCode);
     
     conn.on('open', () => {
-        connStatus.textContent = "Bağlandı!";
+        displayRoomCode.textContent = roomCode; // Keep it on screen for clients too
         conn.send({ type: 'joinTeam', payload: name });
-        setTimeout(() => {
-            joinScreen.classList.add('hidden');
-            gameScreen.classList.remove('hidden');
-        }, 1000);
+        joinScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
     });
 
     conn.on('data', (data) => {
@@ -284,6 +299,10 @@ joinBtn.addEventListener('click', () => {
 
 // UI Control via Client Messages
 startGameBtn.addEventListener('click', () => {
+    if (gameState.isPlaying) return;
+    startGameBtn.blur();
+    startGameBtn.classList.add('hidden');
+
     if (isHost) {
         if (gameState.teams.length === 0) return;
         gameState.isPlaying = true;
@@ -306,6 +325,7 @@ window.addEventListener('keydown', (e) => {
     if (!isMyTurn || !gameScreen.classList.contains('hidden') === false) return;
 
     if (e.key === 'Enter') {
+        e.preventDefault();
         if (currentGuess.length === currentWordLength) {
             if (isHost) hostHandleGuess(myTeamObj.id, currentGuess);
             else if (conn) conn.send({ type: 'submitGuess', payload: currentGuess });
