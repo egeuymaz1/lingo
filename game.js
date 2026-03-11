@@ -1,4 +1,3 @@
-const peer = new Peer();
 let conn = null;
 let isHost = false;
 let myTeamObj = { id: null, name: '', score: 0 };
@@ -221,11 +220,34 @@ function hostHandleGuess(teamId, guessWord) {
 
 
 // --- PEERJS SETUP ---
+// We do not initialize Peer globally anymore, we wait until user clicks host/join
+let peer = null;
 
-peer.on('open', (id) => {
-    myTeamObj.id = id;
-    console.log('My peer ID is: ' + id);
-});
+function generateShortCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // removed confusable chars
+    let result = '';
+    for (let i = 0; i < 5; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
+function initPeer(id = null) {
+    return new Promise((resolve, reject) => {
+        const tempPeer = id ? new Peer(id) : new Peer();
+        
+        tempPeer.on('open', (actualId) => {
+            myTeamObj.id = actualId;
+            console.log('My peer ID is: ' + actualId);
+            resolve(tempPeer);
+        });
+
+        tempPeer.on('error', (err) => {
+            console.error(err);
+            reject(err);
+        });
+    });
+}
 
 // Becoming a Host
 hostBtn.addEventListener('click', async () => {
@@ -233,18 +255,33 @@ hostBtn.addEventListener('click', async () => {
     myTeamObj.name = name;
     isHost = true;
     
-    // Load words
-    await loadWordsForHost();
+    hostBtn.disabled = true;
+    hostBtn.textContent = "Kuruluyor...";
+    
+    try {
+        const customCode = generateShortCode();
+        peer = await initPeer(customCode);
+        
+        setupHostListeners(); // Move connection listeners into a function
+        
+        // Load words
+        await loadWordsForHost();
 
-    // Add self to teams
-    gameState.teams.push(myTeamObj);
-    
-    // Update UI 
-    displayRoomCode.textContent = myTeamObj.id;
-    
-    joinScreen.classList.add('hidden');
-    gameScreen.classList.remove('hidden');
-    hostBroadcast('gameStateUpdate', gameState); // Update self UI
+        // Add self to teams
+        gameState.teams.push(myTeamObj);
+        
+        // Update UI 
+        displayRoomCode.textContent = myTeamObj.id;
+        
+        joinScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        hostBroadcast('gameStateUpdate', gameState); // Update self UI
+    } catch (err) {
+        alert("Oda kurulamadı. Lütfen sayfayı yenileyip tekrar deneyin.");
+        console.error(err);
+        hostBtn.disabled = false;
+        hostBtn.textContent = "Oda Kur (Host)";
+    }
 });
 
 // Copy Code to Clipboard
@@ -263,49 +300,59 @@ copyCodeBtn.addEventListener('click', () => {
 });
 
 // Listening for incoming connections (Only Host does this usually)
-peer.on('connection', (connection) => {
-    if (!isHost) return;
-    
-    connection.on('open', () => {
-        peers.push(connection);
-    });
+function setupHostListeners() {
+    peer.on('connection', (connection) => {
+        if (!isHost) return;
+        
+        connection.on('open', () => {
+            peers.push(connection);
+        });
 
-    connection.on('data', (data) => {
-        if (data.type === 'joinTeam') {
-            gameState.teams.push({ id: connection.peer, name: data.payload, score: 0 });
+        connection.on('data', (data) => {
+            if (data.type === 'joinTeam') {
+                gameState.teams.push({ id: connection.peer, name: data.payload, score: 0 });
+                hostBroadcast('gameStateUpdate', gameState);
+            } else if (data.type === 'startGame' && !gameState.isPlaying) {
+                gameState.isPlaying = true;
+                gameState.currentTurn = -1; // -1 so first start goes to team 0 via isNewTeamTurn=true
+                gameState.currentRoundIndex = 0;
+                gameState.boardState = [];
+                gameState.currentWordLength = ROUNDS[0];
+                hostStartNextTurn(null, true);
+            } else if (data.type === 'submitGuess') {
+                hostHandleGuess(connection.peer, data.payload);
+            }
+        });
+
+        connection.on('close', () => {
+            peers = peers.filter(p => p.peer !== connection.peer);
+            gameState.teams = gameState.teams.filter(t => t.id !== connection.peer);
             hostBroadcast('gameStateUpdate', gameState);
-        } else if (data.type === 'startGame' && !gameState.isPlaying) {
-            gameState.isPlaying = true;
-            gameState.currentTurn = -1; // -1 so first start goes to team 0 via isNewTeamTurn=true
-            gameState.currentRoundIndex = 0;
-            gameState.boardState = [];
-            gameState.currentWordLength = ROUNDS[0];
-            hostStartNextTurn(null, true);
-        } else if (data.type === 'submitGuess') {
-            hostHandleGuess(connection.peer, data.payload);
-        }
+        });
     });
-
-    connection.on('close', () => {
-        peers = peers.filter(p => p.peer !== connection.peer);
-        gameState.teams = gameState.teams.filter(t => t.id !== connection.peer);
-        hostBroadcast('gameStateUpdate', gameState);
-    });
-});
+}
 
 // Joining a Room
-joinBtn.addEventListener('click', () => {
+joinBtn.addEventListener('click', async () => {
     const name = teamNameInput.value.trim() || `Oyuncu-${Math.floor(Math.random()*100)}`;
-    const roomCode = roomCodeInput.value.trim();
+    const roomCode = roomCodeInput.value.trim().toUpperCase();
     if (!roomCode) {
         alert("Oda Kodu gerekli!");
         return;
     }
     
-    myTeamObj.name = name;
-    connStatus.textContent = "Bağlanıyor...";
+    joinBtn.disabled = true;
+    joinBtn.textContent = "Bağlanıyor...";
     
-    conn = peer.connect(roomCode);
+    try {
+        if (!peer) {
+            peer = await initPeer(); // Client gets a random ID
+        }
+        
+        myTeamObj.name = name;
+        connStatus.textContent = "Odaya aranıyor...";
+        
+        conn = peer.connect(roomCode);
     
     conn.on('open', () => {
         displayRoomCode.textContent = roomCode; // Keep it on screen for clients too
@@ -320,7 +367,15 @@ joinBtn.addEventListener('click', () => {
 
     conn.on('error', (err) => {
         connStatus.textContent = "Bağlantı hatası: " + err.message;
+        joinBtn.disabled = false;
+        joinBtn.textContent = "Odaya Katıl";
     });
+    
+    } catch(err) {
+        alert("Ağ hatası, sunucuya bağlanılamadı.");
+        joinBtn.disabled = false;
+        joinBtn.textContent = "Odaya Katıl";
+    }
 });
 
 // UI Control via Client Messages
