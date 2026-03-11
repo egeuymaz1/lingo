@@ -187,7 +187,8 @@ function hostHandleGuess(teamId, guessWord) {
             hostBroadcast('guessResult', {
                boardState: gameState.boardState,
                isWin: false,
-               teamId: teamId
+               teamId: teamId,
+               firstLetter: gameState.firstLetter
             });
         }
     }
@@ -327,16 +328,18 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
         e.preventDefault();
         if (currentGuess.length === currentWordLength) {
-            if (isHost) hostHandleGuess(myTeamObj.id, currentGuess);
-            else if (conn) conn.send({ type: 'submitGuess', payload: currentGuess });
-            
+            const guessToSend = currentGuess;
             isMyTurn = false; 
+            if (isHost) hostHandleGuess(myTeamObj.id, guessToSend);
+            else if (conn) conn.send({ type: 'submitGuess', payload: guessToSend });
         } else {
             showMessage('Kelime eksik!', 'error');
         }
     } else if (e.key === 'Backspace') {
-        currentGuess = currentGuess.slice(0, -1);
-        updateCurrentRowPreview();
+        if (currentGuess.length > 1) {
+            currentGuess = currentGuess.slice(0, -1);
+            updateCurrentRowPreview();
+        }
     } else if (/^[a-zçğıöşüA-ZÇĞIİÖŞÜ]$/.test(e.key) && currentGuess.length < currentWordLength) {
         currentGuess += e.key.toLocaleUpperCase('tr-TR');
         updateCurrentRowPreview();
@@ -452,7 +455,7 @@ function handleIncomingMessage(msg) {
         if (isMyTurn) {
             turnIndicator.textContent = "🎮 SENİN SIRAN! Klavyeden Yaz.";
             turnIndicator.className = 'turn-banner';
-            currentGuess = ""; 
+            currentGuess = payload.firstLetter || ""; 
         } else {
             const actTeam = payload.teams.find(t => t.id === payload.currentTurnTeamId);
             turnIndicator.textContent = `📍 Sıra ${actTeam ? actTeam.name : 'Bekleniyor'} takımında...`;
@@ -464,7 +467,7 @@ function handleIncomingMessage(msg) {
         updateBoard([], payload.firstLetter);
     } 
     else if (type === 'guessResult') {
-        updateBoard(payload.boardState, '');
+        updateBoard(payload.boardState, payload.firstLetter || '');
 
         if (payload.teams) renderLeaderboard(payload.teams, payload.teamId, true);
 
@@ -479,7 +482,7 @@ function handleIncomingMessage(msg) {
         } else {
             if (payload.teamId === myTeamObj.id) {
                  isMyTurn = true;
-                 currentGuess = "";
+                 currentGuess = payload.firstLetter || "";
             }
         }
     } 
