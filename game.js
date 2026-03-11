@@ -465,11 +465,19 @@ function handleIncomingMessage(msg) {
         const maxGuesses = currentWordLength + 1;
         buildEmptyBoard(currentWordLength, maxGuesses);
         updateBoard([], payload.firstLetter);
+        document.body.classList.remove('danger-bg'); // Reset background
     } 
     else if (type === 'guessResult') {
         updateBoard(payload.boardState, payload.firstLetter || '');
 
         if (payload.teams) renderLeaderboard(payload.teams, payload.teamId, true);
+
+        const maxGuesses = currentWordLength + 1;
+        if (payload.boardState.length === maxGuesses - 1 && !payload.isWin) {
+             document.body.classList.add('danger-bg');
+        } else {
+             document.body.classList.remove('danger-bg');
+        }
 
         if (payload.isWin) {
             showMessage(`Tebrikler Bildiniz! +${payload.scoreAdded} Puan`, 'success');
@@ -494,5 +502,6 @@ function handleIncomingMessage(msg) {
         }
         if (isHost) startGameBtn.classList.remove('hidden');
         turnIndicator.textContent = "Oyun Bitti";
+        document.body.classList.remove('danger-bg');
     }
 }
