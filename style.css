@@ -69,8 +69,33 @@ h1.logo {
     font-weight: 800;
     margin-bottom: 10px;
     letter-spacing: -1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
 }
 .logo .highlight { color: var(--primary); }
+
+.version-badge {
+    font-size: 0.9rem;
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--primary);
+    padding: 2px 8px;
+    border-radius: 12px;
+    vertical-align: super;
+    font-weight: 600;
+    border: 1px solid rgba(88, 166, 255, 0.4);
+}
+
+.version-badge-small {
+    font-size: 0.7rem;
+    background: rgba(88, 166, 255, 0.2);
+    color: var(--primary);
+    padding: 1px 6px;
+    border-radius: 8px;
+    vertical-align: super;
+    font-weight: 600;
+}
 
 .logo-small {
     font-size: 1.5rem;

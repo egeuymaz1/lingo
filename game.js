@@ -22,8 +22,7 @@ const displayRoomCode = document.getElementById('display-room-code');
 const copyCodeBtn = document.getElementById('copy-code-btn');
 
 // --- GAME LOGIC (HOST ONLY) ---
-const ROUNDS = [4, 5, 6, 7, 8, 9];
-const TURN_TIME_LIMIT = 45;
+const TURN_TIME_LIMIT = 60; // 1 Minute per strictly team
 let wordLists = {}; 
 let gameState = {
     teams: [],         
@@ -73,7 +72,9 @@ function hostBroadcast(type, payload) {
     peers.forEach(p => p.send(msg));
 }
 
-function hostStartNextTurn(previousWordInfo = null) {
+// Refactored logic: team gets 60s to guess AS MANY WORDS as possible continuously.
+// isNewTeamTurn dictates whether we reset the 60s clock and shift teams or just wipe the board.
+function hostStartNextTurn(previousWordInfo = null, isNewTeamTurn = false) {
     gameState.boardState = [];
     
     if (gameState.teams.length === 0) {
@@ -82,32 +83,37 @@ function hostStartNextTurn(previousWordInfo = null) {
         return;
     }
 
-    gameState.currentTurn++;
-    if (gameState.currentTurn >= gameState.teams.length) {
-        gameState.currentTurn = 0;
-        gameState.currentRoundIndex++;
-        
-        if (gameState.currentRoundIndex >= ROUNDS.length) {
-            gameState.isPlaying = false;
-            clearInterval(hostTimerInterval);
-            hostBroadcast('gameOver', { teams: gameState.teams });
-            return;
+    if (isNewTeamTurn) {
+        gameState.currentTurn++;
+        if (gameState.currentTurn >= gameState.teams.length) {
+            gameState.currentTurn = 0;
+            gameState.currentRoundIndex++;
+            
+            if (gameState.currentRoundIndex >= ROUNDS.length) {
+                gameState.isPlaying = false;
+                clearInterval(hostTimerInterval);
+                hostBroadcast('gameOver', { teams: gameState.teams });
+                return;
+            }
+            gameState.currentWordLength = ROUNDS[gameState.currentRoundIndex];
         }
-        gameState.currentWordLength = ROUNDS[gameState.currentRoundIndex];
+        gameState.timeLeft = TURN_TIME_LIMIT; // Reset 60s for new team
     }
 
-    gameState.targetWord = generateTargetWord(gameState.currentWordLength);
-    gameState.firstLetter = gameState.targetWord.charAt(0).toUpperCase();
+    gameState.targetWord = generateTargetWord(gameState.currentWordLength).toLocaleUpperCase('tr-TR');
+    gameState.firstLetter = gameState.targetWord.charAt(0);
     
-    gameState.timeLeft = TURN_TIME_LIMIT;
+    // Only start the timer if it's a fresh turn or it somehow stopped.
+    // In continuous mode, the timer runs relentlessly downward across words.
     clearInterval(hostTimerInterval);
     hostTimerInterval = setInterval(() => {
         gameState.timeLeft--;
         hostBroadcast('timerTick', gameState.timeLeft);
         if (gameState.timeLeft <= 0) {
-            clearInterval(hostTimerInterval);
+            clearInterval(hostTimerInterval); // Team is completely out of time
             const prevWordInfo = { word: gameState.targetWord, reason: "timeout" };
-            hostStartNextTurn(prevWordInfo);
+            // Pass to the next team
+            hostStartNextTurn(prevWordInfo, true);
         }
     }, 1000);
     
@@ -131,6 +137,24 @@ function hostHandleGuess(teamId, guessWord) {
 
     const guessUpper = guessWord.toLocaleUpperCase('tr-TR');
     const targetUpper = gameState.targetWord.toLocaleUpperCase('tr-TR');
+    
+    // Check Dictionary Validation
+    const wordListObj = wordLists[gameState.currentWordLength];
+    const isGuessValidWord = wordListObj && wordListObj.some(w => w.toLocaleUpperCase('tr-TR') === guessUpper);
+    
+    if (!isGuessValidWord) {
+        // DO NOT clear interval. The timer keeps bleeding!
+        hostBroadcast('invalidWordGuess', {
+            teamId: teamId,
+            invalidWord: guessUpper,
+            correctWord: targetUpper,
+            teams: gameState.teams
+        });
+        
+        // Forfeit word, immediately regenerate for the same team since time is ticking
+        setTimeout(() => { if (gameState.timeLeft > 0) hostStartNextTurn({ word: targetUpper, reason: "invalid_word" }, false); }, 2000);
+        return;
+    }
 
     const result = [];
     const targetCounts = {};
@@ -157,8 +181,8 @@ function hostHandleGuess(teamId, guessWord) {
     const isWin = guessUpper === targetUpper;
 
     if (isWin) {
-        clearInterval(hostTimerInterval);
-        const scoreGained = (gameState.currentWordLength * 10) + gameState.timeLeft;
+        // DO NOT CLEAR INTERVAL. Win means instant next word.
+        const scoreGained = (gameState.currentWordLength * 10); // Flat points since timer is different now
         gameState.teams.find(t => t.id === teamId).score += scoreGained;
         
         hostBroadcast('guessResult', {
@@ -170,11 +194,12 @@ function hostHandleGuess(teamId, guessWord) {
               teams: gameState.teams
         });
         
-        setTimeout(() => hostStartNextTurn({ word: targetUpper, reason: "win" }), 4000);
+        // Provide 2.0 second buffer to appreciate win, then instantly give new word to same team
+        setTimeout(() => { if (gameState.timeLeft > 0) hostStartNextTurn({ word: targetUpper, reason: "win" }, false); }, 2000);
     } else {
         const maxGuesses = gameState.currentWordLength + 1;
         if (gameState.boardState.length >= maxGuesses) {
-            clearInterval(hostTimerInterval);
+            // DO NOT CLEAR INTERVAL. Max guesses means just give a new word.
             hostBroadcast('guessResult', {
                 boardState: gameState.boardState,
                 isWin: false,
@@ -182,7 +207,7 @@ function hostHandleGuess(teamId, guessWord) {
                 correctWord: targetUpper,
                 teams: gameState.teams
             });
-            setTimeout(() => hostStartNextTurn({ word: targetUpper, reason: "max_guesses" }), 4000);
+            setTimeout(() => { if (gameState.timeLeft > 0) hostStartNextTurn({ word: targetUpper, reason: "max_guesses" }, false); }, 2500);
         } else {
             hostBroadcast('guessResult', {
                boardState: gameState.boardState,
@@ -251,11 +276,11 @@ peer.on('connection', (connection) => {
             hostBroadcast('gameStateUpdate', gameState);
         } else if (data.type === 'startGame' && !gameState.isPlaying) {
             gameState.isPlaying = true;
-            gameState.currentTurn = -1;
+            gameState.currentTurn = -1; // -1 so first start goes to team 0 via isNewTeamTurn=true
             gameState.currentRoundIndex = 0;
             gameState.boardState = [];
             gameState.currentWordLength = ROUNDS[0];
-            hostStartNextTurn();
+            hostStartNextTurn(null, true);
         } else if (data.type === 'submitGuess') {
             hostHandleGuess(connection.peer, data.payload);
         }
@@ -311,7 +336,7 @@ startGameBtn.addEventListener('click', () => {
         gameState.currentRoundIndex = 0;
         gameState.boardState = [];
         gameState.currentWordLength = ROUNDS[0];
-        hostStartNextTurn();
+        hostStartNextTurn(null, true);
     } else if (conn) {
         conn.send({ type: 'startGame' });
     }
@@ -449,6 +474,7 @@ function handleIncomingMessage(msg) {
         if (payload.previousTarget) {
             if (payload.previousTarget.reason === 'win') showMessage(`Önceki takım bildi! Kelime: ${payload.previousTarget.word}`, 'success');
             else if (payload.previousTarget.reason === 'timeout') showMessage(`Süre Bitti! Kelime: ${payload.previousTarget.word}`, 'error');
+            else if (payload.previousTarget.reason === 'invalid_word') showMessage(`Geçersiz kelime girildi! Kelime: ${payload.previousTarget.word}`, 'error');
             else showMessage(`Bilemediler! Kelime: ${payload.previousTarget.word}`, 'error');
         }
 
@@ -493,7 +519,17 @@ function handleIncomingMessage(msg) {
                  currentGuess = payload.firstLetter || "";
             }
         }
-    } 
+    }
+    else if (type === 'invalidWordGuess') {
+        if (payload.teams) renderLeaderboard(payload.teams, payload.teamId, true);
+        showMessage(`Geçersiz Kelime: ${payload.invalidWord}`, 'error');
+        turnIndicator.textContent = "❌ Geçersiz Kelime Girdin!";
+        turnIndicator.className = 'turn-banner error';
+        
+        // They lost the word, don't let them type more for it.
+        isMyTurn = false;
+        document.body.classList.remove('danger-bg');
+    }
     else if (type === 'gameOver') {
         gameBoard.innerHTML = '<h2>Oyun Bitti!</h2>';
         const sorted = payload.teams.sort((a,b) => b.score - a.score);
